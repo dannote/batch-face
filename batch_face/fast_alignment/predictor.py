@@ -20,14 +20,6 @@ except:
     onnx = None
     onnxruntime = None
 
-
-def get_device(gpu_id):
-    if gpu_id > -1:
-        return torch.device("cuda:%s" % str(gpu_id))
-    else:
-        return torch.device("cpu")
-
-
 # landmark of (5L, 2L) from [0,1] to real range
 def reproject(bbox, landmark):
     landmark_ = (
@@ -190,14 +182,15 @@ def partition(images, size):
     ]
 
 class LandmarkPredictor:
-    def __init__(self, gpu_id=0, backbone="MobileNet", file=None):
+    def __init__(self, gpu_id=0, device="cuda", backbone="MobileNet", file=None):
         """
-        gpu_id: -1 for cpu, onnx for onnx
+        gpu_id: -1 for cpu
+        device: onnx for onnx
         """
-        if gpu_id == "onnx":
+        if device == "onnx":
             self._initialize_onnx(backbone, file)
         else:
-            self._initialize_normal(gpu_id, backbone, file)
+            self._initialize_normal(device, gpu_id, backbone, file)
 
     def _initialize_onnx(self, backbone, file):
         self.device = "onnx"
@@ -211,8 +204,11 @@ class LandmarkPredictor:
         self.model = onnxruntime.InferenceSession(file)
         self._batch_predict = batch_predict_onnx
 
-    def _initialize_normal(self, gpu_id=0, backbone="MobileNet", file=None):
-        self.device = get_device(gpu_id)
+    def _initialize_normal(self, device, gpu_id=0, backbone="MobileNet", file=None):
+        self.gpu_id = gpu_id if device != "mps" else 0
+        self.device = (
+            torch.device("cpu") if gpu_id == -1 else torch.device(device, gpu_id)
+        )
         self.backbone = backbone
         if backbone == "MobileNet":
             model = MobileNet_GDConv(136)
